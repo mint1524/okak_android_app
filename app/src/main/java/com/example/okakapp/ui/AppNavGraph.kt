@@ -7,12 +7,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.okakapp.OkakApp
 import com.example.okakapp.ui.auth.LoginScreen
 import com.example.okakapp.ui.auth.RegisterScreen
+import com.example.okakapp.ui.chat.ChatScreen
 import com.example.okakapp.ui.chat.ChatsListScreen
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.first
@@ -53,6 +56,16 @@ fun OkakNavHost() {
                         navController.navigateAsRoot(Routes.LOGIN)
                     }
                 }
+            )
+        }
+        composable(
+            route = "${Routes.CHAT}/{${Routes.CHAT_ARG}}",
+            arguments = listOf(navArgument(Routes.CHAT_ARG) { type = NavType.StringType })
+        ) { entry ->
+            val chatId = entry.arguments?.getString(Routes.CHAT_ARG).orEmpty()
+            ChatScreen(
+                chatId = chatId,
+                onBack = { navController.popBackStack() }
             )
         }
     }
