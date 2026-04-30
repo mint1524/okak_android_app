@@ -17,6 +17,8 @@ import com.example.okakapp.ui.auth.LoginScreen
 import com.example.okakapp.ui.auth.RegisterScreen
 import com.example.okakapp.ui.chat.ChatScreen
 import com.example.okakapp.ui.chat.ChatsListScreen
+import com.example.okakapp.ui.profile.ProfileScreen
+import com.example.okakapp.ui.subscription.SubscriptionScreen
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -50,12 +52,23 @@ fun OkakNavHost() {
         composable(Routes.CHATS) {
             ChatsListScreen(
                 onOpenChat = { navController.navigate(Routes.chat(it)) },
+                onOpenSubscription = { navController.navigate(Routes.SUBSCRIPTION) },
+                onOpenProfile = { navController.navigate(Routes.PROFILE) },
                 onLogout = {
                     MainScope().launch {
                         OkakApp.get().authRepo.logout()
                         navController.navigateAsRoot(Routes.LOGIN)
                     }
                 }
+            )
+        }
+        composable(Routes.SUBSCRIPTION) {
+            SubscriptionScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Routes.PROFILE) {
+            ProfileScreen(
+                onBack = { navController.popBackStack() },
+                onLoggedOut = { navController.navigateAsRoot(Routes.LOGIN) }
             )
         }
         composable(
