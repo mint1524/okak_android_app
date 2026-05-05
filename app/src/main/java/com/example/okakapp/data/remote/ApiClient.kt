@@ -13,8 +13,7 @@ import java.util.concurrent.TimeUnit
 
 object ApiClient {
 
-    // 10.0.2.2 — это localhost host машины из эмулятора
-    private const val BASE_URL = "http://10.0.2.2:8080/"
+    private const val BASE_URL = "https://app-api.okak.club/"
 
     @Volatile
     private var api: OkakApi? = null
