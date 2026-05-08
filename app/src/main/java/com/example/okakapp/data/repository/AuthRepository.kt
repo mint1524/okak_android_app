@@ -15,12 +15,12 @@ class AuthRepository(
 
     suspend fun login(email: String, password: String): Result<Unit> = runCatching {
         val resp = api.login(AuthRequest(email.trim(), password))
-        tokenStorage.save(resp.accessToken)
+        tokenStorage.save(resp.accessToken, resp.refreshToken)
     }.mapErrors()
 
     suspend fun register(email: String, password: String): Result<Unit> = runCatching {
         val resp = api.register(AuthRequest(email.trim(), password))
-        tokenStorage.save(resp.accessToken)
+        tokenStorage.save(resp.accessToken, resp.refreshToken)
     }.mapErrors()
 
     suspend fun me(): Result<UserDto> = runCatching { api.me() }.mapErrors()

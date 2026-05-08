@@ -1,5 +1,13 @@
 package com.example.okakapp.ui.chat
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,10 +16,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -33,11 +44,21 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.okakapp.data.remote.MessageDto
+import com.example.okakapp.data.local.cache.MessageEntity
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
+import com.mikepenz.markdown.m3.markdownTypography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,10 +70,12 @@ fun ChatScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val snackbarHost = remember { SnackbarHostState() }
+    val clipboard = LocalClipboardManager.current
 
-    LaunchedEffect(state.messages.size) {
-        if (state.messages.isNotEmpty()) {
-            listState.animateScrollToItem(state.messages.size - 1)
+    val visibleCount = state.messages.size + (if (state.streamingDraft != null || state.isStreaming) 1 else 0)
+    LaunchedEffect(visibleCount, state.streamingDraft?.content?.length) {
+        if (visibleCount > 0) {
+            listState.animateScrollToItem((visibleCount - 1).coerceAtLeast(0))
         }
     }
 
@@ -85,9 +108,7 @@ fun ChatScreen(
                 .padding(padding)
         ) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                if (state.isLoading) {
-                    Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-                } else if (state.messages.isEmpty()) {
+                if (state.messages.isEmpty() && state.streamingDraft == null && !state.isStreaming) {
                     Box(Modifier.fillMaxSize(), Alignment.Center) {
                         Text("Сообщений пока нет, начните разговор")
                     }
@@ -95,18 +116,30 @@ fun ChatScreen(
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         state = listState,
-                        contentPadding = PaddingValues(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(state.messages, key = { it.id }) { msg ->
-                            MessageBubble(msg)
+                            MessageBubble(
+                                role = msg.role,
+                                content = msg.content,
+                                createdAt = msg.createdAt,
+                                onCopy = { clipboard.setText(AnnotatedString(msg.content)) }
+                            )
+                        }
+                        if (state.isStreaming) {
+                            item(key = "streaming-draft") {
+                                StreamingBubble(
+                                    content = state.streamingDraft?.content.orEmpty()
+                                )
+                            }
                         }
                     }
                 }
             }
             ChatInput(
                 text = state.draft,
-                isSending = state.isSending,
+                isSending = state.isStreaming,
                 onTextChange = vm::onDraftChange,
                 onSend = vm::send
             )
@@ -114,9 +147,16 @@ fun ChatScreen(
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
 @Composable
-private fun MessageBubble(msg: MessageDto) {
-    val isUser = msg.role == "user"
+private fun MessageBubble(
+    role: String,
+    content: String,
+    createdAt: String,
+    onCopy: () -> Unit
+) {
+    val isUser = role == "user"
+    val haptic = LocalHapticFeedback.current
     val color = if (isUser) MaterialTheme.colorScheme.primaryContainer
     else MaterialTheme.colorScheme.surfaceVariant
     val align = if (isUser) Alignment.End else Alignment.Start
@@ -127,12 +167,87 @@ private fun MessageBubble(msg: MessageDto) {
     ) {
         Surface(
             color = color,
-            shape = MaterialTheme.shapes.medium,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .widthIn(max = 320.dp)
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onCopy()
+                    }
+                )
+        ) {
+            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                if (isUser) {
+                    Text(content)
+                } else {
+                    Markdown(
+                        content = content,
+                        colors = markdownColor(),
+                        typography = markdownTypography()
+                    )
+                }
+            }
+        }
+        Text(
+            text = formatTime(createdAt),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+        )
+    }
+}
+
+@Composable
+private fun StreamingBubble(content: String) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.Start
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(16.dp),
             modifier = Modifier.widthIn(max = 320.dp)
         ) {
-            Text(
-                text = msg.content,
-                modifier = Modifier.padding(12.dp)
+            Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                if (content.isBlank()) {
+                    TypingDots()
+                } else {
+                    Markdown(
+                        content = content,
+                        colors = markdownColor(),
+                        typography = markdownTypography()
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TypingDots() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        listOf(0, 150, 300).forEach { delay ->
+            val transition = rememberInfiniteTransition(label = "dot$delay")
+            val alpha by transition.animateFloat(
+                initialValue = 0.3f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 600, delayMillis = delay),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "alpha$delay"
+            )
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 2.dp)
+                    .size(8.dp)
+                    .alpha(alpha)
+                    .background(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        shape = CircleShape
+                    )
             )
         }
     }
@@ -164,7 +279,7 @@ private fun ChatInput(
             enabled = !isSending && text.isNotBlank()
         ) {
             if (isSending) {
-                CircularProgressIndicator()
+                CircularProgressIndicator(modifier = Modifier.size(20.dp))
             } else {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить")
             }

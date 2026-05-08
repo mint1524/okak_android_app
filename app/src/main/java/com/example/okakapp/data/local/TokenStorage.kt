@@ -14,17 +14,25 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 class TokenStorage(private val context: Context) {
 
-    private val tokenKey = stringPreferencesKey("access_token")
+    private val accessKey = stringPreferencesKey("access_token")
+    private val refreshKey = stringPreferencesKey("refresh_token")
 
-    val tokenFlow: Flow<String?> = context.dataStore.data.map { it[tokenKey] }
+    val tokenFlow: Flow<String?> = context.dataStore.data.map { it[accessKey] }
 
     suspend fun get(): String? = tokenFlow.first()
+    suspend fun getRefresh(): String? = context.dataStore.data.map { it[refreshKey] }.first()
 
-    suspend fun save(token: String) {
-        context.dataStore.edit { it[tokenKey] = token }
+    suspend fun save(access: String, refresh: String?) {
+        context.dataStore.edit {
+            it[accessKey] = access
+            if (refresh != null) it[refreshKey] = refresh
+        }
     }
 
     suspend fun clear() {
-        context.dataStore.edit { it.remove(tokenKey) }
+        context.dataStore.edit {
+            it.remove(accessKey)
+            it.remove(refreshKey)
+        }
     }
 }

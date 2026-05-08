@@ -2,8 +2,11 @@ package com.example.okakapp
 
 import android.app.Application
 import com.example.okakapp.data.local.TokenStorage
+import com.example.okakapp.data.local.cache.OkakDatabase
+import com.example.okakapp.data.local.SettingsStorage
 import com.example.okakapp.data.remote.ApiClient
 import com.example.okakapp.data.remote.OkakApi
+import com.example.okakapp.data.remote.StreamingClient
 import com.example.okakapp.data.repository.AuthRepository
 import com.example.okakapp.data.repository.ChatRepository
 import com.example.okakapp.data.repository.SubscriptionRepository
@@ -13,7 +16,13 @@ class OkakApp : Application() {
     lateinit var tokenStorage: TokenStorage
         private set
 
+    lateinit var settingsStorage: SettingsStorage
+        private set
+
     lateinit var api: OkakApi
+        private set
+
+    lateinit var streaming: StreamingClient
         private set
 
     lateinit var authRepo: AuthRepository
@@ -25,13 +34,20 @@ class OkakApp : Application() {
     lateinit var subscriptionRepo: SubscriptionRepository
         private set
 
+    lateinit var database: OkakDatabase
+        private set
+
     override fun onCreate() {
         super.onCreate()
         instance = this
         tokenStorage = TokenStorage(applicationContext)
-        api = ApiClient.create(tokenStorage)
+        settingsStorage = SettingsStorage(applicationContext)
+        api = ApiClient.api(tokenStorage)
+        val httpClient = ApiClient.httpClient(tokenStorage)
+        streaming = StreamingClient(httpClient, ApiClient.BASE_URL)
+        database = OkakDatabase.build(applicationContext)
         authRepo = AuthRepository(api, tokenStorage)
-        chatRepo = ChatRepository(api)
+        chatRepo = ChatRepository(api, streaming, database.chatDao(), database.messageDao())
         subscriptionRepo = SubscriptionRepository(api)
     }
 

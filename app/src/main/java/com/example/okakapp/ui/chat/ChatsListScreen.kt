@@ -13,6 +13,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -20,11 +22,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -41,46 +51,57 @@ fun ChatsListScreen(
     vm: ChatsListViewModel = viewModel(factory = ChatsListViewModel.Factory)
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val snackbarHost = remember { SnackbarHostState() }
+    var pendingDelete by remember { mutableStateOf<String?>(null) }
+    var askLogout by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.error) {
+        state.error?.let {
+            snackbarHost.showSnackbar(it)
+            vm.dismissError()
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Чаты") },
                 actions = {
+                    IconButton(onClick = { vm.refresh() }, enabled = !state.isRefreshing) {
+                        if (state.isRefreshing) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.Refresh, contentDescription = "Обновить")
+                        }
+                    }
                     TextButton(onClick = onOpenSubscription) { Text("Подписка") }
                     TextButton(onClick = onOpenProfile) { Text("Профиль") }
-                    TextButton(onClick = onLogout) { Text("Выход") }
+                    TextButton(onClick = { askLogout = true }) { Text("Выход") }
                 }
             )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = {
-                vm.create(title = null) { chat -> onOpenChat(chat.id) }
+                vm.create(title = null) { id -> onOpenChat(id) }
             }) {
                 Icon(Icons.Default.Add, contentDescription = "Новый чат")
             }
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHost) { Snackbar(snackbarData = it) } }
     ) { padding ->
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(padding)
         ) {
-            when {
-                state.isLoading -> Box(Modifier.fillMaxSize(), Alignment.Center) {
-                    CircularProgressIndicator()
+            if (state.chats.isEmpty() && !state.isRefreshing) {
+                Box(Modifier.fillMaxSize(), Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Чатов пока нет", style = MaterialTheme.typography.titleMedium)
+                        Text("Нажмите + чтобы создать новый", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
-                state.error != null -> Column(
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(state.error.orEmpty(), color = MaterialTheme.colorScheme.error)
-                    TextButton(onClick = { vm.load() }) { Text("Обновить") }
-                }
-                state.chats.isEmpty() -> Box(Modifier.fillMaxSize(), Alignment.Center) {
-                    Text("Чатов пока нет. Нажмите +")
-                }
-                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(state.chats, key = { it.id }) { chat ->
                         Row(
                             modifier = Modifier
@@ -92,11 +113,11 @@ fun ChatsListScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(chat.title, style = MaterialTheme.typography.titleMedium)
                                 Text(
-                                    chat.createdAt.take(19).replace('T', ' '),
+                                    formatDateTime(chat.updatedAt),
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
-                            IconButton(onClick = { vm.delete(chat.id) }) {
+                            IconButton(onClick = { pendingDelete = chat.id }) {
                                 Icon(Icons.Default.Delete, contentDescription = "Удалить")
                             }
                         }
@@ -104,5 +125,35 @@ fun ChatsListScreen(
                 }
             }
         }
+    }
+
+    if (pendingDelete != null) {
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Удалить чат?") },
+            text = { Text("Чат и все сообщения будут удалены безвозвратно.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDelete?.let { vm.delete(it) }
+                    pendingDelete = null
+                }) { Text("Удалить") }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Отмена") } }
+        )
+    }
+
+    if (askLogout) {
+        AlertDialog(
+            onDismissRequest = { askLogout = false },
+            title = { Text("Выйти?") },
+            text = { Text("Нужно будет войти заново.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    askLogout = false
+                    onLogout()
+                }) { Text("Выйти") }
+            },
+            dismissButton = { TextButton(onClick = { askLogout = false }) { Text("Отмена") } }
+        )
     }
 }

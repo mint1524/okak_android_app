@@ -5,6 +5,7 @@ import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface OkakApi {
 
@@ -13,6 +14,9 @@ interface OkakApi {
 
     @POST("auth/login")
     suspend fun login(@Body req: AuthRequest): AuthResponse
+
+    @POST("auth/refresh")
+    suspend fun refresh(@Body req: RefreshRequest): AuthResponse
 
     @GET("user/me")
     suspend fun me(): UserDto
@@ -24,7 +28,11 @@ interface OkakApi {
     suspend fun createChat(@Body req: CreateChatRequest): ChatDto
 
     @GET("chats/{chatId}/messages")
-    suspend fun listMessages(@Path("chatId") chatId: String): List<MessageDto>
+    suspend fun listMessages(
+        @Path("chatId") chatId: String,
+        @Query("before") before: String? = null,
+        @Query("limit") limit: Int? = null
+    ): List<MessageDto>
 
     @POST("chats/{chatId}/messages")
     suspend fun sendMessage(
