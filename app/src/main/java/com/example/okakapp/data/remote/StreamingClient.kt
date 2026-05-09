@@ -33,7 +33,7 @@ class StreamingClient(
         val req = Request.Builder()
             .url("${baseUrl.trimEnd('/')}/chats/$chatId/messages/stream")
             .post(body)
-            .header("Accept", "text/event-stream")
+            .header("Accept", "text/event-stream, application/json")
             .build()
 
         httpClient.newCall(req).execute().use { resp ->
@@ -42,7 +42,12 @@ class StreamingClient(
                 val errorMessage = runCatching {
                     json.decodeFromString(ApiError.serializer(), rawBody).message
                 }.getOrDefault(rawBody.ifBlank { "HTTP ${resp.code}" })
-                emit(StreamEvent.Error(errorMessage))
+                val pretty = when (resp.code) {
+                    403 -> "нужна активная подписка"
+                    429 -> "лимит запросов или токенов исчерпан"
+                    else -> errorMessage
+                }
+                emit(StreamEvent.Error(pretty))
                 return@flow
             }
             val source = resp.body?.source() ?: run {

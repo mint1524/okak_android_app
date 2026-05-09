@@ -61,9 +61,10 @@ class SubscriptionViewModel(private val repo: SubscriptionRepository) : ViewMode
                         it.copy(
                             isPurchasing = false,
                             status = newStatus,
-                            message = "Подписка активирована"
+                            message = "Подписка ${plan.name} активирована"
                         )
                     }
+                    load()
                 }
                 .onFailure { e ->
                     _state.update { it.copy(isPurchasing = false, error = e.message ?: "ошибка") }
