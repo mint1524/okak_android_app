@@ -17,6 +17,7 @@ datastore = "1.1.1"
 markdownRenderer = "0.32.0"
 room = "2.6.1"
 ksp = "2.0.21-1.0.27"
+desugar = "2.1.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -47,6 +48,7 @@ markdown-renderer-m3 = { group = "com.mikepenz", name = "multiplatform-markdown-
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+desugar-jdk = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugar" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
