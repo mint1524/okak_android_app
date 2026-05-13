@@ -30,7 +30,8 @@ fun OkakNavHost() {
 
     var startDestination by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
-        val token = tokenStorage.tokenFlow.first()
+        val token = tokenStorage.get()
+        tokenStorage.getRefresh()
         startDestination = if (token.isNullOrBlank()) Routes.LOGIN else Routes.CHATS
     }
 

@@ -39,9 +39,14 @@ object ApiClient {
             }
             val converter = json.asConverterFactory("application/json".toMediaType())
 
+            val refreshClient = OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
+                .build()
+
             val refreshOnly = Retrofit.Builder()
                 .baseUrl(BASE_URL)
-                .client(OkHttpClient.Builder().build())
+                .client(refreshClient)
                 .addConverterFactory(converter)
                 .build()
                 .create(OkakApi::class.java)
@@ -49,7 +54,7 @@ object ApiClient {
             val authInterceptor = Interceptor { chain ->
                 val req = chain.request()
                 if (req.header("X-Skip-Auth") != null) return@Interceptor chain.proceed(req.newBuilder().removeHeader("X-Skip-Auth").build())
-                val token = runBlocking { tokenStorage.get() }
+                val token = tokenStorage.getCached()
                 val withAuth = if (token.isNullOrBlank()) req
                 else req.newBuilder().addHeader("Authorization", "Bearer $token").build()
                 chain.proceed(withAuth)
@@ -57,7 +62,7 @@ object ApiClient {
 
             val authenticator = Authenticator { _, response ->
                 if (response.responseCount() >= 2) return@Authenticator null
-                val refresh = runBlocking { tokenStorage.getRefresh() } ?: return@Authenticator null
+                val refresh = tokenStorage.getCachedRefresh() ?: return@Authenticator null
                 val newPair = runCatching { runBlocking { refreshOnly.refresh(RefreshRequest(refresh)) } }.getOrNull()
                 if (newPair == null) {
                     runBlocking { tokenStorage.clear() }
