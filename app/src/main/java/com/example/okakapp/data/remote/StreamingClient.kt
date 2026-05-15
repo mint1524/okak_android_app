@@ -81,10 +81,11 @@ class StreamingClient(
         }
     }.flowOn(Dispatchers.IO)
 
-    private fun JsonObject.toMessageDto(): MessageDto = MessageDto(
-        id = this["id"]!!.jsonPrimitive.content,
-        role = this["role"]!!.jsonPrimitive.content,
-        content = this["content"]!!.jsonPrimitive.content,
-        createdAt = this["createdAt"]!!.jsonPrimitive.content
-    )
+    private fun JsonObject.toMessageDto(): MessageDto {
+        val id = this["id"]?.jsonPrimitive?.content ?: ""
+        val role = this["role"]?.jsonPrimitive?.content ?: "unknown"
+        val content = this["content"]?.jsonPrimitive?.content ?: ""
+        val createdAt = this["createdAt"]?.jsonPrimitive?.content ?: ""
+        return MessageDto(id = id, role = role, content = content, createdAt = createdAt)
+    }
 }

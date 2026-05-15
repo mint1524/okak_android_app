@@ -98,7 +98,7 @@ class ChatViewModel(
                             ))
                         }
                         is StreamEvent.Error -> {
-                            _state.update { it.copy(error = event.message) }
+                            _state.update { it.copy(isStreaming = false, streamingDraft = null, error = event.message) }
                         }
                         StreamEvent.Done -> {
                             _state.update { it.copy(isStreaming = false, streamingDraft = null) }
