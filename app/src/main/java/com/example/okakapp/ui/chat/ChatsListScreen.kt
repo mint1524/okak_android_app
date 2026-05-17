@@ -1,6 +1,7 @@
 package com.example.okakapp.ui.chat
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
@@ -37,11 +39,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.okakapp.data.local.cache.ChatEntity
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ChatsListScreen(
     onOpenChat: (String) -> Unit,
@@ -52,7 +57,9 @@ fun ChatsListScreen(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbarHost = remember { SnackbarHostState() }
+    val haptic = LocalHapticFeedback.current
     var pendingDelete by remember { mutableStateOf<String?>(null) }
+    var renameTarget by remember { mutableStateOf<ChatEntity?>(null) }
     var askLogout by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.error) {
@@ -106,7 +113,13 @@ fun ChatsListScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onOpenChat(chat.id) }
+                                .combinedClickable(
+                                    onClick = { onOpenChat(chat.id) },
+                                    onLongClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        renameTarget = chat
+                                    }
+                                )
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -139,6 +152,28 @@ fun ChatsListScreen(
                 }) { Text("Удалить") }
             },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Отмена") } }
+        )
+    }
+
+    renameTarget?.let { target ->
+        var newTitle by remember(target.id) { mutableStateOf(target.title) }
+        AlertDialog(
+            onDismissRequest = { renameTarget = null },
+            title = { Text("Переименовать") },
+            text = {
+                OutlinedTextField(
+                    value = newTitle,
+                    onValueChange = { newTitle = it.take(120) },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.rename(target.id, newTitle)
+                    renameTarget = null
+                }, enabled = newTitle.trim().isNotBlank()) { Text("Сохранить") }
+            },
+            dismissButton = { TextButton(onClick = { renameTarget = null }) { Text("Отмена") } }
         )
     }
 

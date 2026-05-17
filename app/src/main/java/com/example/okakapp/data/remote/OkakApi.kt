@@ -3,6 +3,7 @@ package com.example.okakapp.data.remote
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -42,6 +43,12 @@ interface OkakApi {
 
     @DELETE("chats/{chatId}")
     suspend fun deleteChat(@Path("chatId") chatId: String): DeleteChatResponse
+
+    @PATCH("chats/{chatId}")
+    suspend fun renameChat(
+        @Path("chatId") chatId: String,
+        @Body req: UpdateChatRequest
+    ): ChatDto
 
     @GET("subscriptions/plans")
     suspend fun listPlans(): List<PlanDto>

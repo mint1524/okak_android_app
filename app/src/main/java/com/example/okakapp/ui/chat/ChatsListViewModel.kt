@@ -56,6 +56,15 @@ class ChatsListViewModel(private val repo: ChatRepository) : ViewModel() {
         }
     }
 
+    fun rename(chatId: String, title: String) {
+        val trimmed = title.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            repo.rename(chatId, trimmed)
+                .onFailure { e -> _state.update { it.copy(error = e.message ?: "ошибка") } }
+        }
+    }
+
     fun dismissError() = _state.update { it.copy(error = null) }
 
     companion object {

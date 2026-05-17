@@ -69,17 +69,23 @@ class ChatViewModel(
         }
         viewModelScope.launch {
             val accumulator = StringBuilder()
+            var assistantArrived = false
             try {
                 repo.streamMessage(chatId, text).collect { event ->
                     when (event) {
                         is StreamEvent.UserMessage -> {
-                            repo.cacheMessage(MessageEntity(
+                            val entity = MessageEntity(
                                 id = event.message.id,
                                 chatId = chatId,
                                 role = event.message.role,
                                 content = event.message.content,
                                 createdAt = event.message.createdAt
-                            ))
+                            )
+                            repo.cacheMessage(entity)
+                            _state.update { st ->
+                                if (st.messages.any { it.id == entity.id }) st
+                                else st.copy(messages = st.messages + entity)
+                            }
                         }
                         is StreamEvent.Delta -> {
                             accumulator.append(event.content)
@@ -89,35 +95,57 @@ class ChatViewModel(
                             }
                         }
                         is StreamEvent.AssistantMessage -> {
-                            repo.cacheMessage(MessageEntity(
+                            val entity = MessageEntity(
                                 id = event.message.id,
                                 chatId = chatId,
                                 role = event.message.role,
                                 content = event.message.content,
                                 createdAt = event.message.createdAt
-                            ))
+                            )
+                            repo.cacheMessage(entity)
+                            assistantArrived = true
+                            _state.update { st ->
+                                val msgs = if (st.messages.any { it.id == entity.id }) st.messages
+                                else st.messages + entity
+                                st.copy(messages = msgs, isStreaming = false, streamingDraft = null)
+                            }
                         }
                         is StreamEvent.Error -> {
-                            _state.update { it.copy(isStreaming = false, streamingDraft = null, error = event.message) }
+                            _state.update {
+                                it.copy(
+                                    isStreaming = false,
+                                    streamingDraft = null,
+                                    error = event.message,
+                                    draft = if (it.draft.isBlank()) text else it.draft
+                                )
+                            }
                         }
                         StreamEvent.Done -> {
                             _state.update { it.copy(isStreaming = false, streamingDraft = null) }
                             repo.touchChat(chatId)
+                            repo.refreshChats()
                         }
                     }
                 }
                 _state.update { it.copy(isStreaming = false, streamingDraft = null) }
+                if (!assistantArrived) {
+                    _state.update { it.copy(draft = if (it.draft.isBlank()) text else it.draft) }
+                }
             } catch (e: Exception) {
                 _state.update {
                     it.copy(
                         isStreaming = false,
                         streamingDraft = null,
                         error = e.message ?: "ошибка отправки",
-                        draft = text
+                        draft = if (it.draft.isBlank()) text else it.draft
                     )
                 }
             }
         }
+    }
+
+    fun retry() {
+        if (_state.value.draft.isNotBlank() && !_state.value.isStreaming) send()
     }
 
     fun dismissError() = _state.update { it.copy(error = null) }

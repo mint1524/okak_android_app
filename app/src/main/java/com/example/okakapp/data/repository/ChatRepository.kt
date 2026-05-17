@@ -12,6 +12,7 @@ import com.example.okakapp.data.remote.SendMessageRequest
 import com.example.okakapp.data.remote.SendMessageResponse
 import com.example.okakapp.data.remote.StreamEvent
 import com.example.okakapp.data.remote.StreamingClient
+import com.example.okakapp.data.remote.UpdateChatRequest
 import kotlinx.coroutines.flow.Flow
 
 class ChatRepository(
@@ -38,6 +39,12 @@ class ChatRepository(
     suspend fun delete(chatId: String): Result<Unit> = runCatching {
         api.deleteChat(chatId)
         chatDao.delete(chatId)
+    }.mapErrors()
+
+    suspend fun rename(chatId: String, title: String): Result<ChatDto> = runCatching {
+        val updated = api.renameChat(chatId, UpdateChatRequest(title))
+        chatDao.upsert(updated.toEntity())
+        updated
     }.mapErrors()
 
     suspend fun refreshMessages(chatId: String): Result<List<MessageEntity>> = runCatching {
