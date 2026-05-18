@@ -27,7 +27,7 @@ class ChatRepository(
 
     suspend fun refreshChats(): Result<Unit> = runCatching {
         val remote = api.listChats()
-        chatDao.replaceAll(remote.map { it.toEntity() })
+        chatDao.syncAll(remote.map { it.toEntity() })
     }.mapErrors()
 
     suspend fun create(title: String?): Result<ChatDto> = runCatching {

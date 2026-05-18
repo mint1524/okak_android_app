@@ -36,6 +36,20 @@ interface ChatDao {
 
     @Query("DELETE FROM chats")
     suspend fun clear()
+
+    @Query("SELECT id FROM chats")
+    suspend fun allIds(): List<String>
+
+    @Query("DELETE FROM chats WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
+
+    @Transaction
+    suspend fun syncAll(chats: List<ChatEntity>) {
+        val remoteIds = chats.map { it.id }.toSet()
+        val toDelete = allIds().filter { it !in remoteIds }
+        if (toDelete.isNotEmpty()) deleteByIds(toDelete)
+        upsertAll(chats)
+    }
 }
 
 @Dao
