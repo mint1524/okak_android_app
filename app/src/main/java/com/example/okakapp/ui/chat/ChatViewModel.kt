@@ -40,7 +40,11 @@ class ChatViewModel(
 
     init {
         repo.observeMessages(chatId)
-            .onEach { msgs -> _state.update { it.copy(messages = msgs) } }
+            .onEach { msgs ->
+                if (!_state.value.isStreaming) {
+                    _state.update { it.copy(messages = msgs) }
+                }
+            }
             .launchIn(viewModelScope)
         refreshFromServer()
     }
@@ -123,7 +127,7 @@ class ChatViewModel(
                         StreamEvent.Done -> {
                             _state.update { it.copy(isStreaming = false, streamingDraft = null) }
                             repo.touchChat(chatId)
-                            repo.refreshChats()
+                            refreshFromServer()
                         }
                     }
                 }
