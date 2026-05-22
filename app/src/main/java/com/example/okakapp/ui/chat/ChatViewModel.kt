@@ -127,7 +127,6 @@ class ChatViewModel(
                         StreamEvent.Done -> {
                             _state.update { it.copy(isStreaming = false, streamingDraft = null) }
                             repo.touchChat(chatId)
-                            refreshFromServer()
                         }
                     }
                 }
