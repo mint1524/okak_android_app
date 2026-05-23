@@ -15,12 +15,6 @@ data class ChatEntity(
 
 @Entity(
     tableName = "messages",
-    foreignKeys = [ForeignKey(
-        entity = ChatEntity::class,
-        parentColumns = ["id"],
-        childColumns = ["chatId"],
-        onDelete = ForeignKey.CASCADE
-    )],
     indices = [Index("chatId"), Index(value = ["chatId", "createdAt"])]
 )
 data class MessageEntity(

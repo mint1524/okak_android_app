@@ -43,7 +43,7 @@ class ChatRepository(
 
     suspend fun rename(chatId: String, title: String): Result<ChatDto> = runCatching {
         val updated = api.renameChat(chatId, UpdateChatRequest(title))
-        chatDao.upsert(updated.toEntity())
+        chatDao.updateTitle(chatId, title)
         updated
     }.mapErrors()
 
@@ -70,7 +70,7 @@ class ChatRepository(
     }
 
     suspend fun touchChat(id: String) {
-        chatDao.findById(id)?.let { chatDao.upsert(it.copy(updatedAt = nowIso())) }
+        chatDao.touchUpdatedAt(id, nowIso())
     }
 }
 

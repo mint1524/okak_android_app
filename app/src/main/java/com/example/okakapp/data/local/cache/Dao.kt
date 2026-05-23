@@ -43,12 +43,26 @@ interface ChatDao {
     @Query("DELETE FROM chats WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<String>)
 
+    @Query("UPDATE chats SET updatedAt = :updatedAt WHERE id = :id")
+    suspend fun touchUpdatedAt(id: String, updatedAt: String)
+
+    @Query("UPDATE chats SET title = :title WHERE id = :id")
+    suspend fun updateTitle(id: String, title: String)
+
     @Transaction
     suspend fun syncAll(chats: List<ChatEntity>) {
         val remoteIds = chats.map { it.id }.toSet()
         val toDelete = allIds().filter { it !in remoteIds }
         if (toDelete.isNotEmpty()) deleteByIds(toDelete)
-        upsertAll(chats)
+        chats.forEach { chat ->
+            val existing = findById(chat.id)
+            if (existing != null) {
+                updateTitle(chat.id, chat.title)
+                touchUpdatedAt(chat.id, chat.updatedAt)
+            } else {
+                upsert(chat)
+            }
+        }
     }
 }
 
@@ -70,9 +84,17 @@ interface MessageDao {
     @Query("DELETE FROM messages WHERE chatId = :chatId")
     suspend fun deleteByChat(chatId: String)
 
+    @Query("SELECT id FROM messages WHERE chatId = :chatId")
+    suspend fun idsByChat(chatId: String): List<String>
+
     @Transaction
     suspend fun replaceForChat(chatId: String, messages: List<MessageEntity>) {
-        deleteByChat(chatId)
+        val remoteIds = messages.map { it.id }.toSet()
+        val toDelete = idsByChat(chatId).filter { it !in remoteIds }
+        if (toDelete.isNotEmpty()) deleteByIds(toDelete)
         upsertAll(messages)
     }
+
+    @Query("DELETE FROM messages WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
 }
