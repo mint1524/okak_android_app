@@ -49,6 +49,9 @@ interface ChatDao {
     @Query("UPDATE chats SET title = :title WHERE id = :id")
     suspend fun updateTitle(id: String, title: String)
 
+    @Query("SELECT * FROM chats WHERE title LIKE '%' || :query || '%' ORDER BY updatedAt DESC")
+    suspend fun searchByTitle(query: String): List<ChatEntity>
+
     @Transaction
     suspend fun syncAll(chats: List<ChatEntity>) {
         val remoteIds = chats.map { it.id }.toSet()
@@ -97,4 +100,7 @@ interface MessageDao {
 
     @Query("DELETE FROM messages WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<String>)
+
+    @Query("SELECT DISTINCT chatId FROM messages WHERE content LIKE '%' || :query || '%'")
+    suspend fun findChatIdsByContent(query: String): List<String>
 }

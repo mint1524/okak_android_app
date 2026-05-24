@@ -1,6 +1,7 @@
 package com.example.okakapp.ui.chat
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,20 +10,30 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
@@ -30,17 +41,23 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusEvent
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -58,9 +75,13 @@ fun ChatsListScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbarHost = remember { SnackbarHostState() }
     val haptic = LocalHapticFeedback.current
+    val focusManager = LocalFocusManager.current
     var pendingDelete by remember { mutableStateOf<String?>(null) }
     var renameTarget by remember { mutableStateOf<ChatEntity?>(null) }
     var askLogout by remember { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var isSearchFocused by remember { mutableStateOf(false) }
+    val searchFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(state.error) {
         state.error?.let {
@@ -69,21 +90,71 @@ fun ChatsListScreen(
         }
     }
 
+    val displayedChats = if (searchQuery.isNotBlank()) state.filteredChats else state.chats
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Чаты") },
+                title = {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = {
+                            searchQuery = it
+                            vm.onSearchQueryChange(it)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(searchFocusRequester)
+                            .onFocusEvent { focusState ->
+                                isSearchFocused = focusState.isFocused
+                                if (focusState.isFocused) vm.onSearchFocused()
+                                else vm.onSearchFocusLost()
+                            },
+                        placeholder = { Text("Поиск чатов") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = null)
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = {
+                                    searchQuery = ""
+                                    vm.onSearchCleared()
+                                    focusManager.clearFocus()
+                                }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Очистить")
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = {
+                            vm.onSearchSubmitted()
+                            focusManager.clearFocus()
+                        }),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                        ),
+                        shape = MaterialTheme.shapes.large
+                    )
+                },
                 actions = {
-                    IconButton(onClick = { vm.refresh() }, enabled = !state.isRefreshing) {
-                        if (state.isRefreshing) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        } else {
+                    if (state.isRefreshing) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp).padding(end = 4.dp), strokeWidth = 2.dp)
+                    } else {
+                        IconButton(onClick = { vm.refresh() }) {
                             Icon(Icons.Default.Refresh, contentDescription = "Обновить")
                         }
                     }
-                    TextButton(onClick = onOpenSubscription) { Text("Подписка") }
-                    TextButton(onClick = onOpenProfile) { Text("Профиль") }
-                    TextButton(onClick = { askLogout = true }) { Text("Выход") }
+                    IconButton(onClick = onOpenSubscription) {
+                        Icon(Icons.Default.Star, contentDescription = "Подписка")
+                    }
+                    IconButton(onClick = onOpenProfile) {
+                        Icon(Icons.Default.Person, contentDescription = "Профиль")
+                    }
+                    IconButton(onClick = { askLogout = true }) {
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Выход")
+                    }
                 }
             )
         },
@@ -96,11 +167,62 @@ fun ChatsListScreen(
         },
         snackbarHost = { SnackbarHost(snackbarHost) { Snackbar(snackbarData = it) } }
     ) { padding ->
-        Box(modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
         ) {
-            if (state.chats.isEmpty() && !state.isRefreshing) {
+            if (state.isSearching) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+
+            if (searchQuery.isBlank() && isSearchFocused && state.searchHistory.isNotEmpty()) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("История поиска", style = MaterialTheme.typography.labelMedium)
+                        TextButton(onClick = { vm.onClearHistory() }) {
+                            Text("Очистить историю")
+                        }
+                    }
+                    state.searchHistory.forEach { item ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    searchQuery = item
+                                    vm.onHistoryItemClicked(item)
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                item,
+                                modifier = Modifier.padding(start = 12.dp),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+            } else if (searchQuery.isNotBlank() && displayedChats.isEmpty() && !state.isSearching) {
+                Box(Modifier.fillMaxSize(), Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Ничего не найдено", style = MaterialTheme.typography.titleMedium)
+                        TextButton(onClick = { vm.refresh() }) {
+                            Text("Обновить")
+                        }
+                    }
+                }
+            } else if (state.chats.isEmpty() && !state.isRefreshing) {
                 Box(Modifier.fillMaxSize(), Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("Чатов пока нет", style = MaterialTheme.typography.titleMedium)
@@ -109,7 +231,7 @@ fun ChatsListScreen(
                 }
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(state.chats, key = { it.id }) { chat ->
+                    items(displayedChats, key = { it.id }) { chat ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

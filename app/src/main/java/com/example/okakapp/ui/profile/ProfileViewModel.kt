@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.okakapp.OkakApp
+import com.example.okakapp.data.local.SettingsStorage
+import com.example.okakapp.data.local.ThemeMode
 import com.example.okakapp.data.remote.SubscriptionStatusDto
 import com.example.okakapp.data.remote.UserDto
 import com.example.okakapp.data.repository.AuthRepository
@@ -18,18 +20,25 @@ data class ProfileUiState(
     val isLoading: Boolean = false,
     val user: UserDto? = null,
     val subscription: SubscriptionStatusDto? = null,
-    val error: String? = null
+    val error: String? = null,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM
 )
 
 class ProfileViewModel(
     private val authRepo: AuthRepository,
-    private val subRepo: SubscriptionRepository
+    private val subRepo: SubscriptionRepository,
+    private val settingsStorage: SettingsStorage
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ProfileUiState())
     val state: StateFlow<ProfileUiState> = _state.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            settingsStorage.themeFlow.collect { mode ->
+                _state.update { it.copy(themeMode = mode) }
+            }
+        }
         load()
     }
 
@@ -49,6 +58,10 @@ class ProfileViewModel(
         }
     }
 
+    fun setTheme(mode: ThemeMode) {
+        viewModelScope.launch { settingsStorage.setTheme(mode) }
+    }
+
     fun logout(onDone: () -> Unit) {
         viewModelScope.launch {
             authRepo.logout()
@@ -61,7 +74,7 @@ class ProfileViewModel(
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val app = OkakApp.get()
-                return ProfileViewModel(app.authRepo, app.subscriptionRepo) as T
+                return ProfileViewModel(app.authRepo, app.subscriptionRepo, app.settingsStorage) as T
             }
         }
     }
