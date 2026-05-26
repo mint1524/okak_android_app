@@ -1,5 +1,6 @@
 package com.example.okakapp.ui.subscription
 
+import android.app.Activity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -36,6 +38,7 @@ fun SubscriptionScreen(
     vm: SubscriptionViewModel = viewModel(factory = SubscriptionViewModel.Factory)
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val activity = LocalContext.current as? Activity
 
     Scaffold(
         topBar = {
@@ -80,7 +83,10 @@ fun SubscriptionScreen(
 
                     Text("Доступные тарифы", style = MaterialTheme.typography.titleMedium)
                     state.plans.forEach { plan ->
-                        PlanCard(plan = plan, isPurchasing = state.isPurchasing) { vm.buy(plan) }
+                        PlanCard(plan = plan, isPurchasing = state.isPurchasing) {
+                            activity?.let { vm.buy(plan, it) }
+                                ?: vm.load()
+                        }
                     }
 
                     state.message?.let {

@@ -1,9 +1,13 @@
 package com.example.okakapp.ui.subscription
 
+import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.android.billingclient.api.BillingClient
 import com.example.okakapp.OkakApp
+import com.example.okakapp.billing.BillingManager
+import com.example.okakapp.billing.PurchaseEvent
 import com.example.okakapp.data.remote.PlanDto
 import com.example.okakapp.data.remote.SubscriptionStatusDto
 import com.example.okakapp.data.repository.SubscriptionRepository
@@ -22,13 +26,27 @@ data class SubscriptionUiState(
     val message: String? = null
 )
 
-class SubscriptionViewModel(private val repo: SubscriptionRepository) : ViewModel() {
+class SubscriptionViewModel(
+    private val repo: SubscriptionRepository,
+    private val billingManager: BillingManager
+) : ViewModel() {
 
     private val _state = MutableStateFlow(SubscriptionUiState())
     val state: StateFlow<SubscriptionUiState> = _state.asStateFlow()
 
     init {
         load()
+        viewModelScope.launch {
+            billingManager.purchaseEvents.collect { event ->
+                when (event) {
+                    is PurchaseEvent.Success -> verifyPurchase(event.productId, event.purchaseToken)
+                    is PurchaseEvent.Cancelled -> _state.update { it.copy(isPurchasing = false) }
+                    is PurchaseEvent.Error -> _state.update {
+                        it.copy(isPurchasing = false, error = "Ошибка оплаты (код ${event.code}): ${event.message}")
+                    }
+                }
+            }
+        }
     }
 
     fun load() {
@@ -50,24 +68,40 @@ class SubscriptionViewModel(private val repo: SubscriptionRepository) : ViewMode
         }
     }
 
-    fun buy(plan: PlanDto) {
-        // на этом этапе Google Play Billing не подключаем - имитируем покупку
+    fun buy(plan: PlanDto, activity: Activity) {
+        if (!billingManager.isConnected.value) {
+            _state.update { it.copy(error = "Google Play недоступен. Проверьте подключение.") }
+            return
+        }
         _state.update { it.copy(isPurchasing = true, error = null, message = null) }
+        val result = billingManager.launchBillingFlow(activity, plan.productId)
+        if (result.responseCode != BillingClient.BillingResponseCode.OK) {
+            val errorMsg = when (result.responseCode) {
+                BillingClient.BillingResponseCode.ITEM_UNAVAILABLE -> "Товар недоступен. Убедитесь, что приложение установлено из Google Play."
+                BillingClient.BillingResponseCode.BILLING_UNAVAILABLE -> "Google Play Billing недоступен на этом устройстве."
+                else -> "Не удалось открыть оплату: ${result.debugMessage}"
+            }
+            _state.update { it.copy(isPurchasing = false, error = errorMsg) }
+        }
+    }
+
+    private fun verifyPurchase(productId: String, purchaseToken: String) {
         viewModelScope.launch {
-            val fakeToken = "stub-${plan.productId}-${System.currentTimeMillis()}"
-            repo.verify(plan.productId, fakeToken)
+            repo.verify(productId, purchaseToken)
                 .onSuccess { newStatus ->
                     _state.update {
                         it.copy(
                             isPurchasing = false,
                             status = newStatus,
-                            message = "Подписка ${plan.name} активирована"
+                            message = "Подписка активирована!"
                         )
                     }
                     load()
                 }
                 .onFailure { e ->
-                    _state.update { it.copy(isPurchasing = false, error = e.message ?: "ошибка") }
+                    _state.update {
+                        it.copy(isPurchasing = false, error = e.message ?: "Ошибка подтверждения покупки")
+                    }
                 }
         }
     }
@@ -76,7 +110,8 @@ class SubscriptionViewModel(private val repo: SubscriptionRepository) : ViewMode
         val Factory: ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return SubscriptionViewModel(OkakApp.get().subscriptionRepo) as T
+                val app = OkakApp.get()
+                return SubscriptionViewModel(app.subscriptionRepo, app.billingManager) as T
             }
         }
     }

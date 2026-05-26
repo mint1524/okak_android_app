@@ -1,6 +1,7 @@
 package com.example.okakapp
 
 import android.app.Application
+import com.example.okakapp.billing.BillingManager
 import com.example.okakapp.data.local.TokenStorage
 import com.example.okakapp.data.local.cache.OkakDatabase
 import com.example.okakapp.data.local.SettingsStorage
@@ -34,6 +35,9 @@ class OkakApp : Application() {
     lateinit var subscriptionRepo: SubscriptionRepository
         private set
 
+    lateinit var billingManager: BillingManager
+        private set
+
     lateinit var database: OkakDatabase
         private set
 
@@ -49,6 +53,7 @@ class OkakApp : Application() {
         authRepo = AuthRepository(api, tokenStorage)
         chatRepo = ChatRepository(api, streaming, database.chatDao(), database.messageDao())
         subscriptionRepo = SubscriptionRepository(api)
+        billingManager = BillingManager(this)
     }
 
     companion object {
