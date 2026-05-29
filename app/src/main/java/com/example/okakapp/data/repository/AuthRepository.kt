@@ -2,6 +2,8 @@ package com.example.okakapp.data.repository
 
 import com.example.okakapp.data.local.TokenStorage
 import com.example.okakapp.data.remote.AuthRequest
+import com.example.okakapp.data.remote.EmailCodeRequest
+import com.example.okakapp.data.remote.EmailCodeResponse
 import com.example.okakapp.data.remote.OkakApi
 import com.example.okakapp.data.remote.UserDto
 import com.example.okakapp.data.remote.parseError
@@ -18,8 +20,12 @@ class AuthRepository(
         tokenStorage.save(resp.accessToken, resp.refreshToken)
     }.mapErrors()
 
-    suspend fun register(email: String, password: String): Result<Unit> = runCatching {
-        val resp = api.register(AuthRequest(email.trim(), password))
+    suspend fun requestRegistrationCode(email: String): Result<EmailCodeResponse> = runCatching {
+        api.requestRegistrationCode(EmailCodeRequest(email.trim()))
+    }.mapErrors()
+
+    suspend fun register(email: String, password: String, verificationCode: String?): Result<Unit> = runCatching {
+        val resp = api.register(AuthRequest(email.trim(), password, verificationCode?.trim()?.takeIf { it.isNotBlank() }))
         tokenStorage.save(resp.accessToken, resp.refreshToken)
     }.mapErrors()
 

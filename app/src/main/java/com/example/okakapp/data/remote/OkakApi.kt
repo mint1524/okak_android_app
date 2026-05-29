@@ -13,6 +13,9 @@ interface OkakApi {
     @POST("auth/register")
     suspend fun register(@Body req: AuthRequest): AuthResponse
 
+    @POST("auth/register/code")
+    suspend fun requestRegistrationCode(@Body req: EmailCodeRequest): EmailCodeResponse
+
     @POST("auth/login")
     suspend fun login(@Body req: AuthRequest): AuthResponse
 
