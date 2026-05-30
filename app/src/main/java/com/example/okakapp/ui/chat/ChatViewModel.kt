@@ -27,6 +27,7 @@ data class ChatUiState(
     val messages: List<MessageEntity> = emptyList(),
     val streamingDraft: StreamingDraft? = null,
     val draft: String = "",
+    val chatTitle: String = "",
     val error: String? = null
 )
 
@@ -39,6 +40,11 @@ class ChatViewModel(
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
     init {
+        repo.observeChat(chatId)
+            .onEach { chat ->
+                _state.update { it.copy(chatTitle = chat?.title ?: "") }
+            }
+            .launchIn(viewModelScope)
         repo.observeMessages(chatId)
             .onEach { msgs ->
                 if (!_state.value.isStreaming) {
@@ -113,6 +119,9 @@ class ChatViewModel(
                                 else st.messages + entity
                                 st.copy(messages = msgs, isStreaming = false, streamingDraft = null)
                             }
+                        }
+                        is StreamEvent.ChatTitle -> {
+                            repo.cacheChatTitle(event.chatId, event.title)
                         }
                         is StreamEvent.Error -> {
                             _state.update {

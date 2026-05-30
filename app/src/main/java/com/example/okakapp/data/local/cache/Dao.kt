@@ -19,6 +19,9 @@ interface ChatDao {
     @Query("SELECT * FROM chats WHERE id = :id")
     suspend fun findById(id: String): ChatEntity?
 
+    @Query("SELECT * FROM chats WHERE id = :id")
+    fun observeById(id: String): Flow<ChatEntity?>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(chat: ChatEntity)
 

@@ -23,6 +23,7 @@ class ChatRepository(
 ) {
 
     fun observeChats(): Flow<List<ChatEntity>> = chatDao.observeAll()
+    fun observeChat(chatId: String): Flow<ChatEntity?> = chatDao.observeById(chatId)
     fun observeMessages(chatId: String): Flow<List<MessageEntity>> = messageDao.observeByChat(chatId)
 
     suspend fun refreshChats(): Result<Unit> = runCatching {
@@ -71,6 +72,10 @@ class ChatRepository(
 
     suspend fun touchChat(id: String) {
         chatDao.touchUpdatedAt(id, nowIso())
+    }
+
+    suspend fun cacheChatTitle(id: String, title: String) {
+        chatDao.updateTitle(id, title)
     }
 }
 

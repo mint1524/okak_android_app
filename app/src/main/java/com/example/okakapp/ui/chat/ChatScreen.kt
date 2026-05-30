@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,14 +19,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -52,6 +56,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -90,7 +95,7 @@ fun ChatScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Чат") },
+                title = { Text(state.chatTitle.ifBlank { "Чат" }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
@@ -124,13 +129,15 @@ fun ChatScreen(
                                 role = msg.role,
                                 content = msg.content,
                                 createdAt = msg.createdAt,
-                                onCopy = { clipboard.setText(AnnotatedString(msg.content)) }
+                                onCopy = { clipboard.setText(AnnotatedString(msg.content)) },
+                                onCopyText = { clipboard.setText(AnnotatedString(it)) }
                             )
                         }
                         if (state.isStreaming) {
                             item(key = "streaming-draft") {
                                 StreamingBubble(
-                                    content = state.streamingDraft?.content.orEmpty()
+                                    content = state.streamingDraft?.content.orEmpty(),
+                                    onCopyText = { clipboard.setText(AnnotatedString(it)) }
                                 )
                             }
                         }
@@ -153,7 +160,8 @@ private fun MessageBubble(
     role: String,
     content: String,
     createdAt: String,
-    onCopy: () -> Unit
+    onCopy: () -> Unit,
+    onCopyText: (String) -> Unit
 ) {
     val isUser = role == "user"
     val haptic = LocalHapticFeedback.current
@@ -182,11 +190,7 @@ private fun MessageBubble(
                 if (isUser) {
                     Text(content)
                 } else {
-                    Markdown(
-                        content = content,
-                        colors = markdownColor(),
-                        typography = markdownTypography()
-                    )
+                    AssistantMarkdownContent(content = content, onCopyText = onCopyText)
                 }
             }
         }
@@ -200,7 +204,7 @@ private fun MessageBubble(
 }
 
 @Composable
-private fun StreamingBubble(content: String) {
+private fun StreamingBubble(content: String, onCopyText: (String) -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.Start
@@ -214,15 +218,100 @@ private fun StreamingBubble(content: String) {
                 if (content.isBlank()) {
                     TypingDots()
                 } else {
-                    Markdown(
-                        content = content,
-                        colors = markdownColor(),
-                        typography = markdownTypography()
+                    AssistantMarkdownContent(content = content, onCopyText = onCopyText)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AssistantMarkdownContent(content: String, onCopyText: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        parseMarkdownParts(content).forEach { part ->
+            when (part) {
+                is MarkdownPart.TextPart -> {
+                    if (part.text.isNotBlank()) {
+                        Markdown(
+                            content = part.text.trim(),
+                            colors = markdownColor(),
+                            typography = markdownTypography()
+                        )
+                    }
+                }
+                is MarkdownPart.CodeBlock -> {
+                    CodeBlockCard(
+                        language = part.language,
+                        code = part.code.trimEnd(),
+                        onCopy = { onCopyText(part.code.trimEnd()) }
                     )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun CodeBlockCard(language: String, code: String, onCopy: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(8.dp),
+        tonalElevation = 1.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = language.ifBlank { "code" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                IconButton(onClick = onCopy, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Скопировать code block")
+                }
+            }
+            SelectionContainer {
+                Text(
+                    text = code,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                )
+            }
+        }
+    }
+}
+
+private sealed class MarkdownPart {
+    data class TextPart(val text: String) : MarkdownPart()
+    data class CodeBlock(val language: String, val code: String) : MarkdownPart()
+}
+
+private fun parseMarkdownParts(content: String): List<MarkdownPart> {
+    val regex = Regex("```([A-Za-z0-9_+.#-]*)\\n([\\s\\S]*?)```")
+    val parts = mutableListOf<MarkdownPart>()
+    var cursor = 0
+    regex.findAll(content).forEach { match ->
+        if (match.range.first > cursor) {
+            parts += MarkdownPart.TextPart(content.substring(cursor, match.range.first))
+        }
+        parts += MarkdownPart.CodeBlock(
+            language = match.groupValues.getOrNull(1).orEmpty(),
+            code = match.groupValues.getOrNull(2).orEmpty()
+        )
+        cursor = match.range.last + 1
+    }
+    if (cursor < content.length) {
+        parts += MarkdownPart.TextPart(content.substring(cursor))
+    }
+    return parts.ifEmpty { listOf(MarkdownPart.TextPart(content)) }
 }
 
 @Composable

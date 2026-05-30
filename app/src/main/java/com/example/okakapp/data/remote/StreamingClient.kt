@@ -18,6 +18,7 @@ sealed class StreamEvent {
     data class UserMessage(val message: MessageDto) : StreamEvent()
     data class Delta(val content: String) : StreamEvent()
     data class AssistantMessage(val message: MessageDto, val tokensUsed: Int) : StreamEvent()
+    data class ChatTitle(val chatId: String, val title: String) : StreamEvent()
     data class Error(val message: String) : StreamEvent()
     object Done : StreamEvent()
 }
@@ -71,6 +72,11 @@ class StreamingClient(
                     "assistant_message" -> data?.let {
                         val tokens = it["tokensUsed"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
                         emit(StreamEvent.AssistantMessage(it.toMessageDto(), tokens))
+                    }
+                    "chat_title" -> data?.let {
+                        val title = it["title"]?.jsonPrimitive?.content.orEmpty()
+                        val id = it["chatId"]?.jsonPrimitive?.content ?: chatId
+                        if (title.isNotBlank()) emit(StreamEvent.ChatTitle(id, title))
                     }
                     "error" -> data?.get("message")?.jsonPrimitive?.content?.let {
                         emit(StreamEvent.Error(it))
